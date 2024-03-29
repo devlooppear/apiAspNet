@@ -1,0 +1,35 @@
+# Stage 1: Build the application
+FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+WORKDIR /app
+COPY . .
+
+# Removing old migrations
+RUN rm -rf Migrations
+
+RUN dotnet restore "apiAspNet.csproj"
+RUN dotnet build "apiAspNet.csproj" -c Release -o /app/build
+
+# Install Entity Framework Core command-line tools
+RUN dotnet tool install --global dotnet-ef
+
+# Add the tools installation directory to the PATH
+ENV PATH="${PATH}:/root/.dotnet/tools"
+
+# Create Migrations here
+RUN dotnet ef migrations add InitialCreate
+
+# Run Entity Framework Core migrations
+RUN dotnet ef database update
+
+# Stage 2: Publish the application
+FROM build AS publish
+RUN dotnet publish "apiAspNet.csproj" -c Release -o /app/publish
+
+# Stage 3: Final image
+FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS final
+WORKDIR /app
+COPY --from=publish /app/publish .
+ENTRYPOINT ["dotnet", "apiAspNet.dll"]
+
+# Optionally, include `dotnet run` for development/debugging purposes
+CMD ["dotnet", "run"]
